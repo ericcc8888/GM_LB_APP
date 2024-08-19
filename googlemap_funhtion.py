@@ -1,32 +1,20 @@
 from flask import Flask, request, abort
 
-from linebot.v3 import (
-    WebhookHandler
-)
-from linebot.v3.exceptions import (
-    InvalidSignatureError
-)
-from linebot.v3.messaging import (
-    Configuration,
-    ApiClient,
-    MessagingApi,
-    ReplyMessageRequest,
-    TextMessage
-)
-from linebot.v3.webhooks import (
-    MessageEvent,
-    TextMessageContent,
-    LocationMessageContent
-)
+from linebot import LineBotApi, WebhookHandler
+from linebot.models import MessageEvent, TextMessage, LocationMessage, TextSendMessage ,FlexSendMessage
+from linebot.models.flex_message import BubbleContainer, TextComponent, BoxComponent
+from linebot.exceptions import InvalidSignatureError
 
-import os
+from API_KEYS import get_api_keys
+from flex_message_formmat import locations_flexmessage
 import sys
 
 app = Flask(__name__)
 
 # get channel_secret and channel_access_token from your environment variable
-channel_secret = os.getenv('LINE_BOT_SECRET', None)
-channel_access_token = os.getenv('LINE_BOT_ACCESS_TOKEN', None)
+keys = get_api_keys()
+channel_secret = keys['LINE_BOT_SECRET']
+channel_access_token = keys['LINE_BOT_ACCESS_TOKEN']
 if channel_secret is None:
     print('Specify LINE_BOT_SECRET as environment variable.')
     sys.exit(1)
@@ -35,10 +23,7 @@ if channel_access_token is None:
     sys.exit(1)
 
 handler = WebhookHandler(channel_secret)
-
-configuration = Configuration(
-    access_token=channel_access_token
-)
+line_bot_api = LineBotApi(channel_access_token)
 
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -58,42 +43,43 @@ def callback():
 
     return 'OK'
 
+#==============================================================
 
-@handler.add(MessageEvent, message=TextMessageContent)
+#處理文字訊息
+@handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
-    with ApiClient(configuration) as api_client:
-        line_bot_api = MessagingApi(api_client)
-        line_bot_api.reply_message_with_http_info(
-            ReplyMessageRequest(
-                reply_token=event.reply_token,
-                messages=[TextMessage(text=event.message.text)]
-            )
+    # reply_text = TextSendMessage(text=event.message.text)
+
+    # # 使用 reply_message 方法回應使用者
+    # line_bot_api.reply_message(event.reply_token, reply_text)
+
+    if event.message.text == "美食":
+        flex_message = FlexSendMessage(
+        alt_text='This is a Flex Message',
+        contents= locations_flexmessage()
         )
+        line_bot_api.reply_message(event.reply_token, flex_message)
 
-# # 处理 LocationMessage 事件
-@handler.add(MessageEvent, message=LocationMessageContent)
-def handle_location_message(event):
-    # 从事件中提取位置信息W
+    else:
+        reply_text = TextSendMessage(text=event.message.text)
+
+        # 使用 reply_message 方法回應使用者
+        line_bot_api.reply_message(event.reply_token, reply_text)
+
+#==============================================================
+
+#處理位置訊息
+@handler.add(MessageEvent, message=LocationMessage)
+def handle_message(event):
     location = event.message
-    print(location)
-
-    # 打印位置数据
-    print(f"地点名称: {location.title}")
-    print(f"地址: {location.address}")
-    print(f"纬度: {location.latitude}")
-    print(f"经度: {location.longitude}")
 
     # 可以根据需求，做其他处理，比如回复用户消息
-    reply_message = f"你的位置: {location.title} ({location.address})\n纬度: {location.latitude}\n经度: {location.longitude}"
+    reply_text = TextSendMessage(text=f"你的位置: {location.title} ({location.address})\n纬度: {location.latitude}\n经度: {location.longitude}")
 
-    with ApiClient(configuration) as api_client:
-        line_bot_api = MessagingApi(api_client)
-        line_bot_api.reply_message_with_http_info(
-            ReplyMessageRequest(
-                reply_token=event.reply_token,
-                messages=[TextMessage(text=reply_message)]
-            )
-        )
+    # 使用 reply_message 方法回應使用者
+    line_bot_api.reply_message(event.reply_token, reply_text)
+
+#==============================================================
 
 if __name__ == "__main__":
     app.run(debug=True)
