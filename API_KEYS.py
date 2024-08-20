@@ -3,7 +3,8 @@ import os, sys
 def get_api_keys():
 
     api_keys_name = ['LINE_BOT_ACCESS_TOKEN',
-                    'LINE_BOT_SECRET',]
+                    'LINE_BOT_SECRET',
+                    'GOOGLEMAPS_API_KEY']
     
     keys = dict()
 
