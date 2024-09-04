@@ -1,11 +1,11 @@
 from flask import Flask, request, abort
 
 from linebot import LineBotApi, WebhookHandler
-from linebot.models import MessageEvent, TextMessage, LocationMessage, TextSendMessage ,FlexSendMessage
+from linebot.models import MessageEvent, TextMessage, LocationMessage, TextSendMessage ,FlexSendMessage, PostbackEvent, RichMenuBounds, RichMenu, RichMenuSize, RichMenuArea, PostbackAction
 from linebot.exceptions import InvalidSignatureError
 
 from API_KEYS import get_api_keys
-from line_flex import line_store_flex, flex_formmat
+from line_flex import line_store_flex, flex_formmat, rice_class, noodle_class, dessert_class, exotic_cuisine_class
 import sys,googlemaps,requests
 
 app = Flask(__name__)
@@ -77,11 +77,89 @@ def handle_message(event):
 
 #==============================================================
 
+def upload_rich_menu_image(line_bot_api, rich_menu_id, image_path):
+    with open('static/rich_menu.jpeg', 'rb') as f:
+        line_bot_api.set_rich_menu_image(rich_menu_id, "image/jpeg", f)
+
+def create_rich_menu():
+    # 创建主菜单
+    rich_menu_to_create = RichMenu(
+        size=RichMenuSize(width=2500, height=1686),
+        selected=False,
+        name="Main Menu",
+        chat_bar_text="請點擊開始使用隨食即行",
+        areas=[
+            RichMenuArea(
+                bounds=RichMenuBounds(x=59, y=34, width=1140, height=827),
+                action=PostbackAction(data="action=first_layer_url")
+            ),
+            RichMenuArea(
+                bounds=RichMenuBounds(x=1284, y=8, width=1191, height=853),
+                action=PostbackAction(data="action=first_layer_location")
+            ),
+            RichMenuArea(
+                bounds=RichMenuBounds(x=63, y=874, width=1136, height=794),
+                action=PostbackAction(data="action=first_layer_location")
+            ),
+            RichMenuArea(
+                bounds=RichMenuBounds(x=1288, y=874, width=1187, height=807),
+                action=PostbackAction(data="action=location_option1")
+            ),
+        ]
+    )
+
+    rich_menu_id = line_bot_api.create_rich_menu(rich_menu=rich_menu_to_create)
+
+    # 上传并设置图片，使用您上传的图片路径
+    upload_rich_menu_image(line_bot_api, rich_menu_id, 'static/rich_menu.jpeg')
+
+    # 设置为默认的 Rich Menu
+    line_bot_api.set_default_rich_menu(rich_menu_id)
+
+    print(f"Rich menu created and set as default: {rich_menu_id}")
+#==============================================================
+
+@handler.add(PostbackEvent)
+def handle_postback(event):
+    data = event.postback.data
+    #if data == "action=first_layer_text":
+        #flex_message = FlexSendMessage(alt_text="地區選擇", contents=locations_flexmessage())
+        #line_bot_api.reply_message(event.reply_token, flex_message)
+    if data == "action=first_layer_url":
+        flex_message = FlexSendMessage(alt_text="米飯類選擇", contents=rice_class())
+        line_bot_api.reply_message(event.reply_token, flex_message)
+        text = "請點選圖卡告訴我你想吃甚麼飯，上述沒有想吃的也可以打字輸入呦"
+        text_message = TextSendMessage(text)
+        line_bot_api.push_message(event.source.user_id, text_message)
+        
+    elif data == "action=first_layer_location":
+        flex_message = FlexSendMessage(alt_text="麵類選擇", contents=noodle_class())
+        line_bot_api.reply_message(event.reply_token, flex_message)
+        text = "請點選圖卡告訴我你想吃甚麼麵，上述沒有想吃的也可以打字輸入呦"
+        text_message = TextSendMessage(text)
+        line_bot_api.push_message(event.source.user_id, text_message)
+
+    elif data == "action=location_option1":
+        flex_message = FlexSendMessage(alt_text="甜點選擇", contents=dessert_class())
+        line_bot_api.reply_message(event.reply_token, flex_message)
+        text = "請點選圖卡告訴我你想吃甚麼點心，上述沒有想吃的也可以打字輸入呦"
+        text_message = TextSendMessage(text)
+        line_bot_api.push_message(event.source.user_id, text_message)
+
+    elif data == "action=location_option2":
+        flex_message = FlexSendMessage(alt_text="異國料理選擇", contents=exotic_cuisine_class())
+        line_bot_api.reply_message(event.reply_token, flex_message)
+        text = "請點選圖卡告訴我你想吃甚麼風格的料理，上述沒有想吃的也可以打字輸入呦"
+        text_message = TextSendMessage(text)
+        line_bot_api.push_message(event.source.user_id, text_message)
+    
+#==============================================================
+
 def get_store_info(location, need_food, max_results=10):
     # Geocoding an address
     origin_location = {'lat':location.latitude, 'lng':location.longitude}
     # 使用 Places API 搜尋附近500公尺內的餐廳
-    places_result = gmaps.places_nearby(location=origin_location, radius=500, keyword='滷肉飯', language="zh-TW")
+    places_result = gmaps.places_nearby(location=origin_location, radius=500, keyword=need_food, language="zh-TW")
 
     places_text = []
     flex_message_datas = []
@@ -131,6 +209,7 @@ def get_store_info(location, need_food, max_results=10):
         places_text.append(line_store_flex(photo_url, name, place_rate, detailed_address, business_status, telephone, googlemap_url, business_color , flex_message_datas))
 
     flex_message = flex_formmat(places_text[0])
+    print(flex_message)
     return flex_message
 
 #==============================================================
